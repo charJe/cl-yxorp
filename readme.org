@@ -1,0 +1,60 @@
+#+title: (reverse "PROXY") ;=> "YXORP"
+
+A reverse proxy server written in and configurable in Common Lisp.
+
+It supports WebSocket, HTTP, HTTPS, HTTP to HTTPS redirecting, port and host forwarding configuration using a real programming language, HTTP header and body manipulation (also using a real programming language).
+
+It does not support HTTP serving, load balancing, request & response filters for non-utf-8,  or pure TCP connections. Raise an issue if you need any of those or anything else.
+
+You can load it into a common lisp project, extend it and configure it there, or you can build it and run it on the command line, providing a configuration file.
+
+* Configuration
+See =config.lisp= for what the default values are.
+#+BEGIN_SRC lisp
+  (config
+   :port 4433 ;; start the reverse proxy server on port 4433
+   :destinator ;; function to decide where to forward requests
+   (lambda ()
+     (if (header :upgrade) ;; if the upgrade header exists (if it is websocket)
+         8082 ;; forward to port 8082, you better be running a websocket server there
+         8081)) ;; else forward to port 8081 where you should be running an http server
+   :response-filter
+   (lambda (body) ;; run all http utf-8 responses through this function
+     (if (= 200 (header :status)) ;; if the response status is 200
+         (str:concat body "!") ;; if append exclaimation to the body
+         body)) ;; else just send the body
+   :ssl (ssl-config ;; enable HTTPS
+         :certificate "localhost.crt" ;; path to the cert file
+         :key "localhost.key" ;; path to the key file
+         :password "qwer" ;; password for the key file (remember this is a real programming langauge so if you want to load this from a file or something, go for it.)
+         :redirect-port 8080 ;; port to expect HTTP connections and redirect to HTTPS
+         :redirect-destination 4433)) ;; port to redirect HTTP connections to. This should eventually get back to the port the reverse proxy is running on
+#+END_SRC
+
+If there are any headers that you would like to be automatically converted to integers, ~push~ the header keyword to the ~*integer-headers*~ variable.
+
+* Building For Command Line Use
+
+#+BEGIN_SRC sh
+$ sbcl --noinform --disable-debugger --load build.lisp
+#+END_SRC
+
+then you can do
+
+#+BEGIN_SRC sh
+$ ./cl-yxorp <config file>
+#+END_SRC
+
+* Using In A Lisp Project
+
+This just allows you to start, stop, and configure yxorp from you lisp code instead of being file and command line based.
+
+Just install via whatever lisp package manager you use (quicklisp, ultralisp, qlot, roswell, guix), then add ~"yxorp"~ to the ~:depends-on~ clause in your system definition. Then you can use the API in your project.
+
+ - ~start~ (config)
+   CONFIG can be the name of a configuration file, a ~yxorp:config~ structure, or left out to use the default configuration.
+   
+ - ~stop~
+   Stop yxorp and any threads associated with it. That is, any thread who's name starts with ~"YXORP"~.
+
+   
