@@ -45,16 +45,18 @@ then you can do
 $ ./cl-yxorp <config file>
 #+END_SRC
 
+It should be really easy to get to work for other Common Lisp implementations, just open a pull request or issue.
+
 * Using In A Lisp Project
 
 This just allows you to start, stop, and configure yxorp from you lisp code instead of being file and command line based.
 
-Just install via whatever lisp package manager you use (quicklisp, ultralisp, qlot, roswell, guix), then add ~"yxorp"~ to the ~:depends-on~ clause in your system definition. Then you can use the API in your project.
+Just install via whatever lisp package manager you use (quicklisp, ultralisp, qlot, roswell, guix), then add "yxorp" to the ~:depends-on~ clause in your system definition. Then you can use the API in your project.
 
  - ~start~ (config)
    CONFIG can be the name of a configuration file, a ~yxorp:config~ structure, or left out to use the default configuration.
    
  - ~stop~
-   Stop yxorp and any threads associated with it. That is, any thread who's name starts with ~"YXORP"~.
+   Stop yxorp and any threads associated with it. That is, any thread who's name starts with "YXORP".
 
    
