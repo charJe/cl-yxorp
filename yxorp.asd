@@ -7,7 +7,6 @@
    #:usocket-server
    #:cl+ssl
    #:binding-arrows
-   #:cl-octet-streams
    #:flexi-streams)
   :components
   ((:file "package")
