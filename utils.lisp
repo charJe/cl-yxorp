@@ -82,7 +82,7 @@
               (parse-integer (second pair))
               (second pair)))))
 
-(defun parse-request-headers (string)
+(defun %parse-request-headers (string)
   (let* ((lines (str:split +crlf+ string :omit-nulls t))
          (first-line (str:split " " (first lines))))
     (append
@@ -91,7 +91,10 @@
            (cons :http-version (third first-line)))
      (map 'list 'parse-header-line (rest lines)))))
 
-(defun parse-response-headers (string)
+(defun parse-request-headers (stream)
+  (%parse-request-headers (read-headers stream)))
+
+(defun %parse-response-headers (string)
   (let* ((lines (str:split +crlf+ string :omit-nulls t))
          (first-line (str:split " " (first lines))))
     (append
@@ -99,6 +102,9 @@
            (cons :status (parse-integer (second first-line)))
            (cons :message (str:join " " (cddr first-line))))
      (map 'list 'parse-header-line (rest lines)))))
+
+(defun parse-response-headers (stream)
+  (%parse-response-headers (read-headers stream)))
 
 (defun read-headers (stream)
   (loop with end = (reverse (str:concat +crlf+ +crlf+))

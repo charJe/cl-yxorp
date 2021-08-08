@@ -13,7 +13,7 @@
                    :key (ssl-config-key ssl)
                    :password (ssl-config-password ssl))
                   client)))
-          (*headers* (parse-request-headers (read-headers client)))
+          (*headers* (parse-request-headers client))
           (destination (funcall (config-destinator config))))
      (when destination
        (multiple-value-bind
@@ -57,7 +57,6 @@
                    (write-sequence (map 'list 'char-code (serialize-headers *headers*)) server)
                    (write-sequence body server)
                    (force-output server))
-                 (let* ((*headers* (parse-response-headers (read-headers server)))
                         (length (header :content-length))
                         (utf8 (str:containsp "utf-8" (header :content-type)))
                         (body (when length (read-sequence* server length)))
@@ -76,7 +75,6 @@
 (defun ssl-redirect (client config)
   (#+yxorp-build ignore-errors #-yxorp-build progn
   (let* ((client (flex:make-flexi-stream client :external-format :utf8))
-         (*headers* (parse-request-headers (read-headers client)))
          (destination (ssl-config-redirect-destination (config-ssl config))))
     (-> (list (cons :http-version "HTTP/1.1") (cons :status 301) (cons :message "Moved Permanently")
               (cons :location
@@ -88,6 +86,7 @@
       serialize-headers
       (write-sequence client))
     (force-output client))))
+   (let* ((*headers* (parse-request-headers client))
 
 (defun start (config
               &aux (config (or (and (stringp config)
