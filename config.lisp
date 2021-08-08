@@ -1,5 +1,32 @@
 (in-package #:yxorp)
 
+(deftype port ()
+  'integer)
+
+(deftype destination ()
+  '(or string port null))
+
+(defun valid-destination-p (destination)
+  (typecase destination
+    (null nil)
+    (port t)
+    (string
+     (handler-case
+         (-<> destination
+           (str:split ":" <> :omit-nulls t)
+           second
+           parse-integer)
+       (parse-error nil)))))
+
+(defun destination-parts (destination)
+  (typecase destination
+    (port
+     (values "localhost" destination))
+    (string
+     (let ((parts (str:split ":" destination :omit-nulls t)))
+       (values (first parts)
+               (parse-integer (second parts)))))))
+
 (defstruct (ssl-config (:constructor ssl-config))
   (certificate "cert.pem"
    :type (or pathname string)
@@ -11,18 +38,18 @@
    :type (or string null)
    :read-only t)
   (redirect-port nil
-   :type (or integer null)
+   :type (or port null)
    :read-only t)
-  (redirect-destination 443
-   :type integer
+  (redirect-to 443
+   :type port
    :read-only t))
 
 (defstruct (config (:constructor config))
   (port 8080
-   :type integer
+   :type port
    :read-only t)
   (destinator (lambda () 8081)
-   :type (function () (or string number null))
+   :type (function () destination)
    :read-only t)
   (request-filter (lambda (body) body)
    :type (function (string) string)

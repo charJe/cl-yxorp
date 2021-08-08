@@ -28,7 +28,7 @@ See =config.lisp= for what the default values are.
          :key "localhost.key" ;; path to the key file
          :password "qwer" ;; password for the key file (remember this is a real programming langauge so if you want to load this from a file or something, go for it.)
          :redirect-port 8080 ;; port to expect HTTP connections and redirect to HTTPS
-         :redirect-destination 4433)) ;; port to redirect HTTP connections to. This should eventually get back to the port the reverse proxy is running on
+         :redirect-to 4433)) ;; port to redirect HTTP connections to. This should eventually get back to the port the reverse proxy is running on
 #+END_SRC
 
 If there are any headers that you would like to be automatically converted to integers, ~push~ the header keyword to the ~*integer-headers*~ variable.
