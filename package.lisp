@@ -5,11 +5,14 @@
                 #:socket-server
                 #:socket-connect)
   (:import-from #:binding-arrows
-                #:some-<>
-                #:some->>
+                #:some->
+                #:-<>
                 #:->
                 #:as->
                 #:->>)
+  (:import-from #:flexi-streams
+                #:string-to-octets
+                #:octets-to-string)
   (:export
    #:header
    #:config
@@ -17,7 +20,8 @@
    #:*integer-headers*
    #:stop
    #:start
-   #:read-config))
+   #:read-config
+   #:websocket-p))
 
 (defpackage #:yxorp-config
   (:use #:cl

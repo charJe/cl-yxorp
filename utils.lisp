@@ -17,7 +17,6 @@
     (read-sequence seq stream :end end)
     seq))
 
-
 (defun rename-thread (thread new-name)
   (let ((name (bt:thread-name thread))
         (new-name-length (length new-name)))
@@ -110,8 +109,8 @@
   (loop with end = (reverse (str:concat +crlf+ +crlf+))
         with chars = (list)
         until (and (nth 4 chars)
-                  (string= (str:concat (subseq chars 0 4))
-                           end))
+                   (string= (str:concat (subseq chars 0 4))
+                            end))
         for byte = (read-byte stream nil)
         while byte
         for char = (code-char byte) do
@@ -124,3 +123,39 @@
           (progn
             (write-byte byte destination)
             (force-output destination))))
+
+(defun websocket-p ()
+  (string= "websocket" (str:downcase (header :upgrade))))
+
+(defun read-body (stream filter)
+  "Read an http body from STREAM and run it throught FILTER if the content-type
+ header says it is utf-8."
+  (declare (type (function (string) string) filter))
+  (let* ((length (header :content-length))
+         (utf8 (str:containsp "utf-8" (header :content-type) :ignore-case t))
+         (body (when length (read-sequence* stream length))))
+    (if (and utf8 length)
+        (-<> body
+          (octets-to-string :external-format :utf8)
+          (funcall filter <>)
+          (string-to-octets :external-format :utf8))
+        body)))
+
+(defun write-headers (stream)
+  (write-sequence (string-to-octets (serialize-headers *headers*)) stream)
+  (force-output stream))
+
+(defun write-body-and-headers (body stream)
+  (when body
+    (setf (header :content-length) (length body)))
+  (write-headers stream)
+  (write-sequence body stream)
+  (force-output stream))
+
+(defun make-ssl-stream (stream config)
+  (let ((ssl-config (config-ssl config)))
+    (cl+ssl:make-ssl-server-stream
+     stream
+     :certificate (ssl-config-certificate ssl-config)
+     :key (ssl-config-key ssl-config)
+     :password (ssl-config-password ssl-config))))
