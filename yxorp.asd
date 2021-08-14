@@ -7,7 +7,8 @@
    #:usocket-server
    #:cl+ssl
    #:binding-arrows
-   #:flexi-streams)
+   #:flexi-streams
+   #:trivial-garbage)
   :components
   ((:file "package")
    (:file "threads")
