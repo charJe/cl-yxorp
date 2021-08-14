@@ -10,6 +10,7 @@
    #:flexi-streams)
   :components
   ((:file "package")
+   (:file "threads")
    (:file "utils")
    (:file "config")
    (:file "main")))
