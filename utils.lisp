@@ -18,15 +18,6 @@
     (read-sequence seq stream :end end)
     seq))
 
-(defun rename-thread (thread new-name)
-  (let ((name (bt:thread-name thread))
-        (new-name-length (length new-name)))
-    (loop for index from 0 below (length name) do
-      (if (<= new-name-length index)
-          (setf (elt name index) #\nul)
-          (setf (elt name index)
-            (elt new-name index))))))
-
 (defun header (name &optional (headers *headers*))
   (declare (type (or keyword string) name))
   (if (stringp name)
