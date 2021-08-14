@@ -3,6 +3,7 @@
 (defvar +crlf+
   (str:concat (list (code-char 13) (code-char 10))))
 
+(declaim (type list headers))
 (defvar *headers*)
 
 (defvar *integer-headers*
@@ -27,11 +28,14 @@
             (elt new-name index))))))
 
 (defun header (name &optional (headers *headers*))
+  (declare (type (or keyword string) name))
   (if (stringp name)
       (header (make-keyword name) headers)
       (cdr (assoc name headers))))
 
 (defun set-header (new-value name &optional (headers *headers*))
+  (declare (type (or keyword string) name)
+           (type list headers))
   (cond
     ((stringp name)
      (set-header new-value (make-keyword name)
@@ -43,12 +47,15 @@
            (push (cons name new-value)
                  headers))))
     (:else
-     (delete name headers :key 'car))))
+     (setq headers (delete name headers :key 'car)))))
 
 (defun (setf header) (new-value name &optional (headers *headers*))
+  (declare (type (or keyword string) name)
+           (type list headers))
   (set-header new-value name headers))
 
 (defun serialize-headers (headers)
+  (declare (type list headers))
   (let ((top (list :method :uri :http-version :status :message)))
     (str:join
      +crlf+
@@ -62,6 +69,7 @@
                      (map 'list 'princ-to-string))))
              (as-> headers it
                (remove-if (lambda (name)
+                            (declare (type keyword name))
                             (member name top))
                           it :key 'car)
                (map 'list
@@ -74,6 +82,7 @@
              (list +crlf+)))))
   
 (defun parse-header-line (line)
+  (declare (type string line))
   (let* ((pair (str:split ": " line :omit-nulls t))
          (name (make-keyword (first pair))))
     (cons name
@@ -106,10 +115,10 @@
   (%parse-response-headers (read-headers stream)))
 
 (defun read-headers (stream)
-  (loop with end = (reverse (str:concat +crlf+ +crlf+))
+  (loop with end = (the simple-string (reverse (str:concat +crlf+ +crlf+)))
         with chars = (list)
         until (and (nth 4 chars)
-                   (string= (str:concat (subseq chars 0 4))
+                   (string= (the simple-string (str:concat (subseq chars 0 4)))
                             end))
         for byte = (read-byte stream nil)
         while byte
@@ -125,7 +134,8 @@
             (force-output destination))))
 
 (defun websocket-p ()
-  (string= "websocket" (str:downcase (header :upgrade))))
+  (string= "websocket"
+           (the simple-string (str:downcase (header :upgrade)))))
 
 (defun read-body (stream filter)
   "Read an http body from STREAM and run it throught FILTER if the content-type
@@ -146,6 +156,7 @@
   (force-output stream))
 
 (defun write-body-and-headers (body stream)
+  (declare (type (vector (unsigned-byte 8)) body))
   (when body
     (setf (header :content-length) (length body)))
   (write-headers stream)
