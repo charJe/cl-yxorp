@@ -1,5 +1,15 @@
 (In-package #:yxorp)
 
+(defmacro with-socket-handler-case (stream &body body)
+  `(handler-case ,@body
+     (cl+ssl::ssl-error-ssl ()
+       (format *error-output* "Non-ssl connection attempt; Consider configuring the ssl-redirect server.~%"))
+     (stream-error (condition)
+       (close ,stream :abort t)
+       (format *error-output* "Client unexpectedly disconnected with ~A.~%"
+               (type-of condition)))
+     (t (c) (format *error-output* "~a~%" c))))
+
 (defun websocket-handler (client server)
   (bt:make-thread
    (lambda ()
