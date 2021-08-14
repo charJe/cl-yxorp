@@ -61,12 +61,18 @@
    :type (or ssl-config null)
    :read-only t))
 
-(defun packageize (string)
-  (str:concat "(progn #.(in-package #:yxorp-config) " string ")"))
-
 (defun read-config (file)
-  (-> file
-    uiop:read-file-string
-    packageize
-    read-from-string
-    eval))
+  (flet ((packageize (string)
+           (str:concat "(progn #.(in-package #:yxorp-config) "
+                       string ")")))
+    (let ((package *package*))
+      (prog1 (handler-case
+                 (-> file
+                   uiop:read-file-string
+                   packageize
+                   read-from-string
+                   eval)
+               (error (condition)
+                 (format *error-output* "There is a problem with your config file:~%~A~%"
+                         condition)))
+        (setq *package* package)))))
