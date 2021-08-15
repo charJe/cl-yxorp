@@ -81,7 +81,7 @@
     (server (config-port config) 'proxy-handler "YXORP Server")))
 
 (defun stop ()
-  (map-threads 'bt:destroy-thread))
+  (map-threads #'bt:destroy-thread))
 
 (defun main (&aux (args (uiop:command-line-arguments)))
   (start (nth 0 args))

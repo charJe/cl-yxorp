@@ -21,7 +21,9 @@
    #:stop
    #:start
    #:read-config
-   #:websocket-p))
+   #:websocket-p
+   #:track-thread
+   #:map-threads))
 
 (defpackage #:yxorp-config
   (:use #:cl

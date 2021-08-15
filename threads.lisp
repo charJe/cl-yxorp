@@ -13,6 +13,12 @@
   (bt:with-lock-held (*threads*-lock)
     (setq *threads* (delete-if-not 'tg:weak-pointer-value
                                    *threads*))
+    (setq *threads* (delete-if-not
+                     (lambda (pointer)
+                       (-> pointer
+                         tg:weak-pointer-value
+                         bt:thread-alive-p))
+                     *threads*))
     (map 'list
          (lambda (weak-pointer)
            (funcall function (tg:weak-pointer-value weak-pointer)))
