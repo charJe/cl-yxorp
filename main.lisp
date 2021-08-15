@@ -66,14 +66,18 @@
                           ((config-p config) config)
                           (:else (config)))))
   (flet ((server (port handler name)
-           (track-thread
-            (socket-server
-             usocket:*wildcard-host* port
-             handler (list config)
-             :element-type '(unsigned-byte 8)
-             :multi-threading t
-             :in-new-thread t
-             :name name))))
+           (handler-case
+               (track-thread
+                (socket-server
+                 usocket:*wildcard-host* port
+                 handler (list config)
+                 :element-type '(unsigned-byte 8)
+                 :multi-threading t
+                 :in-new-thread t
+                 :name name))
+             (address-in-use-error ()
+               (format *error-output* "Port ~A is already being used by another program. Edit your configuration to use a different port or stop the other program.~%"
+                       port)))))
     (some-> config
       config-ssl
       ssl-config-redirect-port
@@ -87,10 +91,11 @@
   (start (nth 0 args))
   ;; this is done in favor of :in-new-thread nil to properly catch interrupt
   (handler-case
-      (bt:join-thread
-       (find "YXORP Server" (the list (bt:all-threads))
-             :key 'bt:thread-name
-             :test 'string=))
+      (let ((server (find "YXORP Server" (the list (bt:all-threads))
+                          :key 'bt:thread-name
+                          :test 'string=)))
+        (when server
+          (bt:join-thread server)))
     (#+sbcl sb-sys:interactive-interrupt
      #+clozure ccl:interrupt-signal-condition
      #+ecl interrupt-signal-condition

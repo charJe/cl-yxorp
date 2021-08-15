@@ -1,6 +1,7 @@
 (defpackage yxorp
   (:use #:cl)
   (:import-from #:usocket
+                #:address-in-use-error
                 #:socket-stream
                 #:socket-server
                 #:socket-connect)
