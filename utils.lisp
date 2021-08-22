@@ -1,7 +1,7 @@
 (in-package #:yxorp)
 
 (defvar +crlf+
-  (str:concat (list (code-char 13) (code-char 10))))
+  (coerce (list (code-char 13) (code-char 10)) 'string))
 
 (declaim (type list headers))
 (defvar *headers*)
@@ -109,13 +109,14 @@
   (loop with end = (the simple-string (reverse (str:concat +crlf+ +crlf+)))
         with chars = (list)
         until (and (nth 4 chars)
-                   (string= (the simple-string (str:concat (subseq chars 0 4)))
+                   (string= (coerce (subseq chars 0 4)
+                                    'simple-string)
                             end))
         for byte = (read-byte stream nil)
         while byte
         for char = (code-char byte) do
           (push char chars)
-        finally (return (str:concat (reverse chars)))))
+        finally (return (coerce (reverse chars) 'string))))
 
 (defun forward-stream (origin destination)
   (loop for byte = (read-byte origin nil)
