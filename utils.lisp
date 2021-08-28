@@ -119,7 +119,8 @@
         finally (return (coerce (reverse chars) 'string))))
 
 (defun forward-stream (origin destination)
-  (loop for byte = (read-byte origin nil)
+  (loop for byte = (ignore-errors
+                    (read-byte origin nil))
         while byte do
           (progn
             (write-byte byte destination)
