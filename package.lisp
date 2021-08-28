@@ -16,6 +16,7 @@
                 #:octets-to-string)
   (:export
    #:header
+   #:*headers*
    #:config
    #:ssl-config
    #:*integer-headers*
