@@ -8,7 +8,7 @@
        (close ,stream :abort t)
        (format *error-output* "Client unexpectedly disconnected with ~A.~%"
                (type-of condition)))
-     (t (c) (format *error-output* "~a~%" c))))
+     (t (c) (format *error-output* "~A~%" c))))
 
 (defun websocket-handler (client server)
   (track-thread
@@ -56,7 +56,7 @@
                         (str:concat
                          "https://" (first (str:split ":" (header :host) :omit-nulls t))
                          (when (/= 433 destination)
-                           (format nil ":~a" destination))
+                           (format nil ":~A" destination))
                          (header :uri)))))
       (write-headers client))))
 
