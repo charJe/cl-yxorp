@@ -128,7 +128,11 @@
 
 (defun websocket-p ()
   (string= "websocket"
-           (the simple-string (str:downcase (header :upgrade)))))
+           (let ((upgrade (str:downcase (header :upgrade))))
+             (the simple-string
+                  (if upgrade
+                      upgrade
+                      "")))))
 
 (defun read-body (stream filter)
   "Read an http body from STREAM and run it throught FILTER if the content-type
