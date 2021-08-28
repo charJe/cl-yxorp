@@ -149,7 +149,7 @@
   (force-output stream))
 
 (defun write-body-and-headers (body stream)
-  (declare (type (vector (unsigned-byte 8)) body))
+  (declare (type (or vector null) body))
   (when body
     (setf (header :content-length) (length body)))
   (write-headers stream)
