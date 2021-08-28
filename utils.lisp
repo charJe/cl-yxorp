@@ -35,10 +35,10 @@
      (let ((pair (find name headers :key 'car)))
        (if pair
            (setf (cdr pair) new-value)
-           (push (cons name new-value)
-                 headers))))
+           (setq *headers*
+                 (acons name new-value headers)))))
     (:else
-     (setq headers (delete name headers :key 'car)))))
+     (setq *headers* (delete name headers :key 'car)))))
 
 (defun (setf header) (new-value name &optional (headers *headers*))
   (declare (type (or keyword string) name)
