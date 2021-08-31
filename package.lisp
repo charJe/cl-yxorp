@@ -15,6 +15,7 @@
                 #:string-to-octets
                 #:octets-to-string)
   (:export
+   #:*suppress-errors*
    #:header
    #:*headers*
    #:*request-headers*

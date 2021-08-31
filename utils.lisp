@@ -132,7 +132,7 @@
   (loop for byte = (ignore-errors
                     (read-byte origin nil))
         while byte do
-          (progn
+          (ignore-errors
             (write-byte byte destination)
             (force-output destination))))
 
