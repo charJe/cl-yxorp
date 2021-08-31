@@ -25,6 +25,7 @@
   (let ((body (read-body client (config-request-filter config))))
     (write-body-and-headers body server))
   (let* ((*headers* (parse-response-headers server))
+         (*response-headers* *headers*)
          (body (read-body server (config-response-filter config))))
     (write-body-and-headers body client)))
 
@@ -35,6 +36,7 @@
                        (make-ssl-stream client config)
                        client))
            (*headers* (parse-request-headers client))
+           (*request-headers* *headers*)
            (destination (funcall (config-destinator config))))
       (when (valid-destination-p destination)
         (multiple-value-bind (host port) (destination-parts destination)

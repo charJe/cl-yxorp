@@ -3,7 +3,11 @@
 (defvar +crlf+
   (coerce (list (code-char 13) (code-char 10)) 'string))
 
-(declaim (type list headers))
+(declaim (type list *request-headers*))
+(defvar *request-headers*)
+(declaim (type list *response-headers*))
+(defvar *response-headers*)
+(declaim (type list *headers*))
 (defvar *headers*)
 
 (defvar *integer-headers*
@@ -24,26 +28,32 @@
       (header (make-keyword name) headers)
       (cdr (assoc name headers))))
 
-(defun set-header (new-value name &optional (headers *headers*))
-  (declare (type (or keyword string) name)
-           (type list headers))
-  (cond
-    ((stringp name)
-     (set-header new-value (make-keyword name)
-                 headers))
-    (new-value
-     (let ((pair (find name headers :key 'car)))
-       (if pair
-           (setf (cdr pair) new-value)
-           (setq *headers*
-                 (acons name new-value headers)))))
-    (:else
-     (setq *headers* (delete name headers :key 'car)))))
-
-(defun (setf header) (new-value name &optional (headers *headers*))
-  (declare (type (or keyword string) name)
-           (type list headers))
-  (set-header new-value name headers))
+(define-setf-expander header (name &optional (headers '*headers*) &environment env)
+  (multiple-value-bind (vars vals new-value setter getter)
+      (get-setf-expansion name env)
+    (declare (ignore vars vals new-value setter))
+    (let ((mplace (gensym))
+          (mcons (gensym))
+          (mname (gensym))
+          (mnew-value (gensym)))
+      (values
+       (list mname mplace mcons)
+       (list name headers `(assoc ,mname ,mplace))
+       (list mnew-value)
+       `(prog1 ,mnew-value
+          (cond
+            (,mcons
+             (setf (cdr ,mcons) ,mnew-value))
+            ((and ,mnew-value (consp ,mplace))
+             (rplacd ,mplace
+                     (cons
+                      (cons ,mname ,mnew-value)
+                      (cdr ,mplace))))
+            (,mnew-value
+             (setf ,headers (acons ,mname ,mnew-value nil)))
+            (:else
+             (setf ,headers (delete ,mname ,mplace :key 'car)))))
+       `(header ,getter)))))
 
 (defun serialize-headers (headers)
   (declare (type list headers))

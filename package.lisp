@@ -17,6 +17,8 @@
   (:export
    #:header
    #:*headers*
+   #:*request-headers*
+   #:*response-headers*
    #:config
    #:ssl-config
    #:*integer-headers*
@@ -24,6 +26,10 @@
    #:start
    #:read-config
    #:websocket-p
+   #:read-headers
+   #:read-body
+   #:write-headers
+   #:write-body-and-headers
    #:track-thread
    #:map-threads))
 
