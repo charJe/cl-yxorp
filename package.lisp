@@ -6,6 +6,7 @@
                 #:socket-server
                 #:socket-connect)
   (:import-from #:binding-arrows
+                #:some-<>>
                 #:some->
                 #:-<>
                 #:->

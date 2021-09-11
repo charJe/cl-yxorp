@@ -149,13 +149,27 @@
  header says it is utf-8."
   (declare (type (function (string) string) filter))
   (let* ((length (header :content-length))
-         (utf8 (str:containsp "utf-8" (header :content-type) :ignore-case t))
-         (body (when length (read-sequence* stream length))))
-    (if (and utf8 length)
-        (-<> body
-          (octets-to-string :external-format :utf8)
+         (str:*omit-nulls* t)
+         (encoding
+           (or (some-<>> :content-type
+                 header
+                 (str:split ";")
+                 (map 'list 'str:trim)
+                 (find "charset" <> :test 'str:starts-with-p)
+                 (str:split "=")
+                 second
+                 str:upcase
+                 make-keyword)
+               (when (str:containsp "text" (header :content-type))
+                 :iso-8859-1)))
+         (body (if (null length)
+                   nil
+                   (read-sequence* stream length))))
+    (if encoding
+        (-<> (or body "")
+          (octets-to-string :external-format encoding)
           (funcall filter <>)
-          (string-to-octets :external-format :utf8))
+          (string-to-octets :external-format encoding))
         body)))
 
 (defun write-headers (stream)
