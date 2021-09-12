@@ -147,7 +147,6 @@
 (defun read-body (stream filter)
   "Read an http body from STREAM and run it throught FILTER if the content-type
  header says it is utf-8."
-  (declare (type (function (string) string) filter))
   (let* ((length (header :content-length))
          (str:*omit-nulls* t)
          (encoding

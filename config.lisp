@@ -49,13 +49,13 @@
    :type port
    :read-only t)
   (destinator (lambda () 8081)
-   :type (function () destination)
+   :type (or (function () destination) symbol)
    :read-only t)
   (request-filter (lambda (body) body)
-   :type (function (string) string)
+   :type (or (function (string) string) symbol)
    :read-only t)
   (response-filter (lambda (body) body)
-   :type (function (string) string)
+   :type (or (function (string) string) symbol)
    :read-only t)
   (ssl nil
    :type (or ssl-config null)
