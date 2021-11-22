@@ -26,7 +26,8 @@
     (lambda ()
       (unwind-protect
            (forward-stream server client)
-        (close client)))
+        (handler-case (close client)
+          (stream-error nil))))
     :name "YXORP Server->Client"))
   (write-headers server)
   (forward-stream client server))
