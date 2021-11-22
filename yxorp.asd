@@ -5,7 +5,7 @@
 HTTP to HTTPS redirecting, port and host forwarding configuration using a real
 programming language, HTTP header and body manipulation (also using a real
 programming language)."
-  :version "0.1"
+  :version "0.2"
   :author "Charles Jackson <charles.b.jackson@protonmail.com>"
   :licence "AGPL3"
   :depends-on
