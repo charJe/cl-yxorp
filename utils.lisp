@@ -148,8 +148,7 @@
                       "")))))
 
 (defun read-body (stream filter)
-  "Read an http body from STREAM and run it throught FILTER if the content-type
- header says it is utf-8."
+  "Read an http body from STREAM and run it throught FILTER."
   (let* ((length (header :content-length))
          (str:*omit-nulls* t)
          (encoding
@@ -164,14 +163,13 @@
                  make-keyword)
                (when (str:containsp "text" (header :content-type))
                  :iso-8859-1)))
-         (body (if (null length)
-                   nil
-                   (read-sequence* stream length))))
-    (if encoding
-        (-<> (or body "")
-          (octets-to-string :external-format encoding)
+         (body (unless (null length)
+                 (read-sequence* stream length))))
+    (if (or (null body) encoding)
+        (-<> (or body #())
+          (octets-to-string :external-format (or encoding :iso-8859-1))
           (funcall filter <>)
-          (string-to-octets :external-format encoding))
+          (string-to-octets :external-format (or encoding :iso-8859-1)))
         body)))
 
 (defun write-headers (stream)
