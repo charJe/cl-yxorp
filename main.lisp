@@ -40,13 +40,27 @@
          (body (read-body server (config-response-filter config))))
     (write-body-and-headers body client)))
 
+(defun save-ip (headers)
+  (if (find "FORWARDED"
+            headers
+            :key (lambda (cons)
+                   (symbol-name (car cons)))
+            :test 'str:containsp)
+      headers
+      (let ((ip (princ-to-string usocket:*remote-host*)))
+        (append
+         (list (cons :x-forwarded-for ip))
+         (list (cons :forwarded
+                     (str:concat "for=" ip)))
+         headers))))
+
 (defun proxy-handler (client config)
   (track-thread (bt:current-thread))
   (with-socket-handler-case client
     (let* ((client (if (ssl-config-p (config-ssl config))
                        (make-ssl-stream client config)
                        client))
-           (*headers* (parse-request-headers client))
+           (*headers* (save-ip (parse-request-headers client)))
            (*request-headers* *headers*)
            (destination (funcall (config-destinator config))))
       (when (valid-destination-p destination)

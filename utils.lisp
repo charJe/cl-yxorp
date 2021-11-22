@@ -113,7 +113,10 @@
      (map 'list 'parse-header-line (rest lines)))))
 
 (defun parse-response-headers (stream)
-  (%parse-response-headers (read-headers stream)))
+  (let ((response-header-string (read-headers stream)))
+    (when (str:blankp response-header-string)
+      (abort))
+    (%parse-response-headers response-header-string)))
 
 (defun read-headers (stream)
   (loop with end = (the simple-string (reverse (str:concat +crlf+ +crlf+)))
