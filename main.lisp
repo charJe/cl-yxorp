@@ -40,6 +40,17 @@
          (body (read-body server (config-response-filter config))))
     (write-body-and-headers body client)))
 
+(defun filter-encodings (headers)
+  (let* ((*headers* headers))
+    (setf (header :accept-encoding)
+          (->> :accept-encoding
+            extract-encodings-from
+            (remove-if-not 'encodingp)
+            (map 'list 'symbol-name)
+            (map 'list 'str:downcase)
+            (str:join ", ")))
+    *headers*))
+
 (defun save-ip (headers)
   (if (find "FORWARDED"
             headers
@@ -47,7 +58,7 @@
                    (symbol-name (car cons)))
             :test 'str:containsp)
       headers
-      (let ((ip (princ-to-string usocket:*remote-host*)))
+      (let ((ip (str:join "." (map 'list 'princ-to-string usocket:*remote-host*))))
         (append
          (list (cons :x-forwarded-for ip))
          (list (cons :forwarded
@@ -60,7 +71,7 @@
     (let* ((client (if (ssl-config-p (config-ssl config))
                        (make-ssl-stream client config)
                        client))
-           (*headers* (save-ip (parse-request-headers client)))
+           (*headers* (filter-encodings (save-ip (parse-request-headers client))))
            (*request-headers* *headers*)
            (destination (funcall (config-destinator config))))
       (when (valid-destination-p destination)

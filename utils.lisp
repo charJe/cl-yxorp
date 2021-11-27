@@ -17,10 +17,16 @@
   (intern (str:upcase name)
           '#:keyword))
 
-(defun read-sequence* (stream end)
-  (let ((seq (make-array end)))
-    (read-sequence seq stream :end end)
-    seq))
+(defun read-sequence* (stream)
+  (if (not (or (header :content-length)
+               (header :transfer-encoding)))
+      #()
+      (loop with result = (list)
+            for byte = (handler-case (read-byte stream nil nil)
+                         (end-of-file nil))
+            while byte do
+              (push byte result)
+            finally (return (coerce (reverse result) 'vector)))))
 
 (defun header (name &optional (headers *headers*))
   (declare (type (or keyword string) name))
@@ -28,32 +34,13 @@
       (header (make-keyword name) headers)
       (cdr (assoc name headers))))
 
-(define-setf-expander header (name &optional (headers '*headers*) &environment env)
-  (multiple-value-bind (vars vals new-value setter getter)
-      (get-setf-expansion name env)
-    (declare (ignore vars vals new-value setter))
-    (let ((mplace (gensym))
-          (mcons (gensym))
-          (mname (gensym))
-          (mnew-value (gensym)))
-      (values
-       (list mname mplace mcons)
-       (list name headers `(assoc ,mname ,mplace))
-       (list mnew-value)
-       `(prog1 ,mnew-value
-          (cond
-            (,mcons
-             (setf (cdr ,mcons) ,mnew-value))
-            ((and ,mnew-value (consp ,mplace))
-             (rplacd ,mplace
-                     (cons
-                      (cons ,mname ,mnew-value)
-                      (cdr ,mplace))))
-            (,mnew-value
-             (setf ,headers (acons ,mname ,mnew-value nil)))
-            (:else
-             (setf ,headers (delete ,mname ,mplace :key 'car)))))
-       `(header ,getter)))))
+(defun (setf header) (new-value name &optional (headers *headers*))
+  (let ((headers (delete name headers :key 'car)))
+    (prog1 new-value
+      (setf *headers*
+            (if (null new-value)
+                headers
+                (acons name new-value headers))))))
 
 (defun serialize-headers (headers)
   (declare (type list headers))
@@ -147,30 +134,60 @@
                       upgrade
                       "")))))
 
+(defun extract-encodings-from (header)
+  (declare (keyword header))
+  (some->> header
+    header
+    (str:split ", ")
+    (map 'list 'str:trim)
+    (map 'list 'str:upcase)
+    (map 'list 'make-keyword)
+    (remove-if-not 'encodingp)))
+
+(defun extract-charset ()
+  (or (some-<>> :content-type
+        header
+        (str:split ";")
+        (map 'list 'str:trim)
+        (find "charset" <> :test 'str:starts-with-p)
+        (str:split "=")
+        second
+        str:upcase
+        make-keyword)
+      (when (str:containsp "text" (header :content-type))
+        :iso-8859-1)))
+
 (defun read-body (stream filter)
   "Read an http body from STREAM and run it throught FILTER."
-  (let* ((length (header :content-length))
-         (str:*omit-nulls* t)
-         (encoding
-           (or (some-<>> :content-type
-                 header
-                 (str:split ";")
-                 (map 'list 'str:trim)
-                 (find "charset" <> :test 'str:starts-with-p)
-                 (str:split "=")
-                 second
-                 str:upcase
-                 make-keyword)
-               (when (str:containsp "text" (header :content-type))
-                 :iso-8859-1)))
-         (body (unless (null length)
-                 (read-sequence* stream length))))
-    (if (or (null body) encoding)
-        (-<> (or body #())
-          (octets-to-string :external-format (or encoding :iso-8859-1))
-          (funcall filter <>)
-          (string-to-octets :external-format (or encoding :iso-8859-1)))
-        body)))
+  (let* ((str:*omit-nulls* t)
+         (charset (extract-charset))
+         (transfer-encodings (extract-encodings-from :transfer-encoding))
+         (content-encodings (extract-encodings-from :content-encoding))
+         (body (-> stream
+                 (apply-decodings (reverse transfer-encodings))
+                 (apply-decodings (reverse content-encodings))
+                 read-sequence*)))
+    (setf (header :transfer-encoding) nil
+          (header :content-encoding) content-encodings)
+    (let ((output-body
+            (handler-bind
+                ((flexi-streams:external-format-encoding-error
+                   (lambda (condition) (declare (ignore condition))
+                     (invoke-restart (find-restart 'use-value)
+                                     #\replacement_character))))
+              (-<> body
+                (octets-to-string :external-format (or charset :iso-8859-1))
+                (funcall filter <>)
+                (string-to-octets :external-format (or charset :iso-8859-1))))))
+      (let ((length (length body)))
+        (when body
+          (setf (header :content-length)
+                (unless (= 0 length)
+                  length))))
+      (-> output-body
+        flex:make-in-memory-input-stream
+        (apply-encodings content-encodings)
+        read-sequence*))))
 
 (defun write-headers (stream)
   (write-sequence (string-to-octets (serialize-headers *headers*)) stream)
@@ -178,8 +195,6 @@
 
 (defun write-body-and-headers (body stream)
   (declare (type (or vector null) body))
-  (when body
-    (setf (header :content-length) (length body)))
   (write-headers stream)
   (write-sequence body stream)
   (force-output stream))

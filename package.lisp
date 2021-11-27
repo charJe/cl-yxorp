@@ -6,6 +6,7 @@
                 #:socket-server
                 #:socket-connect)
   (:import-from #:binding-arrows
+                #:some->>
                 #:some-<>>
                 #:some->
                 #:-<>
@@ -33,9 +34,11 @@
    #:write-headers
    #:write-body-and-headers
    #:track-thread
-   #:map-threads))
+   #:map-threads
+   #:extract-charset
+   #:extract-encodings))
 
-(defpackage #:yxorp-config
+(defpackage yxorp-config
   (:use #:cl
         #:yxorp
         #:binding-arrows))

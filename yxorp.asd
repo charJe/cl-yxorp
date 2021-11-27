@@ -5,20 +5,25 @@
 HTTP to HTTPS redirecting, port and host forwarding configuration using a real
 programming language, HTTP header and body manipulation (also using a real
 programming language)."
-  :version "0.2"
+  :version "0.3"
   :author "Charles Jackson <charles.b.jackson@protonmail.com>"
   :licence "AGPL3"
   :depends-on
-  (#:str
-   #:usocket
-   #:usocket-server
+  (#:binding-arrows
+   #:chipz
+   #:chunga
    #:cl+ssl
-   #:binding-arrows
    #:flexi-streams
-   #:trivial-garbage)
+   #:salza2
+   #:str
+   #:trivial-garbage
+   #:usocket
+   #:usocket-server)
+  :serial t
   :components
   ((:file "package")
    (:file "threads")
+   (:file "coding")
    (:file "utils")
    (:file "config")
    (:file "main")))
