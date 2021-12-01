@@ -35,7 +35,7 @@
 (defun http-handler (client server config)
   (let ((body (read-body client (config-request-filter config))))
     (write-body-and-headers body server))
-  (let* ((*headers* (parse-response-headers server))
+  (let* ((*headers* (alist->ht (parse-response-headers server)))
          (*response-headers* *headers*)
          (body (read-body server (config-response-filter config))))
     (write-body-and-headers body client)))
@@ -71,7 +71,12 @@
     (let* ((client (if (ssl-config-p (config-ssl config))
                        (make-ssl-stream client config)
                        client))
-           (*headers* (filter-encodings (save-ip (parse-request-headers client))))
+           (*headers*
+             (-> client
+               parse-request-headers
+               save-ip
+               alist->ht
+               filter-encodings))
            (*request-headers* *headers*)
            (destination (funcall (config-destinator config))))
       (when (valid-destination-p destination)
@@ -86,16 +91,17 @@
 
 (defun ssl-redirect (client config)
   (with-socket-handler-case client
-    (let* ((*headers* (parse-request-headers client))
+    (let* ((*headers* (alist->ht (parse-request-headers client)))
            (destination (-> config config-ssl ssl-config-redirect-to)))
       (setq *headers*
-            (list (cons :http-version "HTTP/1.1") (cons :status 301) (cons :message "Moved Permanently")
-                  (cons :location
-                        (str:concat
-                         "https://" (first (str:split ":" (header :host) :omit-nulls t))
-                         (when (/= 433 destination)
-                           (format nil ":~A" destination))
-                         (header :uri)))))
+            (alist->ht
+             (list (cons :http-version "HTTP/1.1") (cons :status 301) (cons :message "Moved Permanently")
+                   (cons :location
+                         (str:concat
+                          "https://" (first (str:split ":" (header :host) :omit-nulls t))
+                          (when (/= 433 destination)
+                            (format nil ":~A" destination))
+                          (header :uri))))))
       (write-headers client))))
 
 (defun start (config

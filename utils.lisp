@@ -3,11 +3,11 @@
 (defvar +crlf+
   (coerce (list (code-char 13) (code-char 10)) 'string))
 
-(declaim (type list *request-headers*))
+(declaim (hash-table *request-headers*))
 (defvar *request-headers*)
-(declaim (type list *response-headers*))
+(declaim (hash-table *response-headers*))
 (defvar *response-headers*)
-(declaim (type list *headers*))
+(declaim (hash-table *headers*))
 (defvar *headers*)
 
 (defvar *integer-headers*
@@ -18,56 +18,60 @@
           '#:keyword))
 
 (defun read-sequence* (stream)
-  (if (not (or (header :content-length)
-               (header :transfer-encoding)))
-      #()
-      (loop with result = (list)
-            for byte = (handler-case (read-byte stream nil nil)
-                         (end-of-file nil))
-            while byte do
-              (push byte result)
-            finally (return (coerce (reverse result) 'vector)))))
+  (let ((content-length (header :content-length)))
+    (cond
+      ((or (not (or content-length
+                    (header :transfer-encoding)))
+           (member (header :method) (list "get" "head") :test 'equalp))
+       #())
+      ((header :content-length)
+       (let ((seq (make-array content-length :element-type '(unsigned-byte 8))))
+         (read-sequence seq stream :end content-length)
+         seq))
+      (:else
+       (loop with result = (list)
+             for byte = (handler-case (read-byte stream nil nil)
+                          (end-of-file nil))
+             while byte do
+               (push byte result)
+             finally (return (coerce (reverse result) 'vector)))))))
 
 (defun header (name &optional (headers *headers*))
-  (declare (type (or keyword string) name))
-  (if (stringp name)
-      (header (make-keyword name) headers)
-      (cdr (assoc name headers))))
+  (declare (keyword name) (hash-table headers))
+  (gethash name headers))
 
-(defun (setf header) (new-value name &optional (headers *headers*))
-  (let ((headers (delete name headers :key 'car)))
-    (prog1 new-value
-      (setf *headers*
-            (if (null new-value)
-                headers
-                (acons name new-value headers))))))
+(defun (setf header) (new-value name &aux (headers *headers*))
+  (declare (keyword name) (hash-table headers))
+  (if new-value
+      (setf (gethash name headers) new-value)
+      (remhash name headers)))
 
 (defun serialize-headers (headers)
   (declare (type list headers))
   (let ((top (list :method :uri :http-version :status :message)))
-    (str:join
-     +crlf+
-     (append (list
-              (str:join
-               " " (->> top
-                     (map 'list
-                          (lambda (name)
-                            (header name headers)))
-                     (remove nil)
-                     (map 'list 'princ-to-string))))
-             (as-> headers it
-               (remove-if (lambda (name)
-                            (declare (type keyword name))
-                            (member name top))
-                          it :key 'car)
-               (map 'list
-                    (lambda (pair)
-                      (str:join
-                       ": " (list
-                             (-> pair car symbol-name str:downcase)
-                             (princ-to-string (cdr pair)))))
-                    it))
-             (list +crlf+)))))
+  (str:join
+   +crlf+
+   (append (list
+            (str:join
+             " " (->> top
+                   (map 'list
+                        (lambda (name)
+                          (cdr (assoc name headers))))
+                   (remove nil)
+                   (map 'list 'princ-to-string))))
+           (as-> headers it
+             (remove-if (lambda (name)
+                          (declare (type keyword name))
+                          (member name top))
+                        it :key 'car)
+             (map 'list
+                  (lambda (pair)
+                    (str:join
+                     ": " (list
+                           (-> pair car symbol-name str:downcase)
+                           (princ-to-string (cdr pair)))))
+                  it))
+           (list +crlf+)))))
   
 (defun parse-header-line (line)
   (declare (type string line))
@@ -179,18 +183,21 @@
                 (octets-to-string :external-format (or charset :iso-8859-1))
                 (funcall filter <>)
                 (string-to-octets :external-format (or charset :iso-8859-1))))))
-      (let ((length (length body)))
-        (when body
+      (let ((length (length output-body)))
           (setf (header :content-length)
                 (unless (= 0 length)
-                  length))))
+                  length)))
       (-> output-body
         flex:make-in-memory-input-stream
         (apply-encodings content-encodings)
         read-sequence*))))
 
 (defun write-headers (stream)
-  (write-sequence (string-to-octets (serialize-headers *headers*)) stream)
+  (-> *headers*
+    ht->alist
+    serialize-headers
+    string-to-octets
+    (write-sequence stream))
   (force-output stream))
 
 (defun write-body-and-headers (body stream)

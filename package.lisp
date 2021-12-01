@@ -16,6 +16,9 @@
   (:import-from #:flexi-streams
                 #:string-to-octets
                 #:octets-to-string)
+  (:import-from #:rutils
+                #:alist->ht
+                #:ht->alist)
   (:export
    #:*suppress-errors*
    #:header
