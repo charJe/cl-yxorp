@@ -31,6 +31,10 @@
    #:stop
    #:start
    #:read-config
+   #:valid-destination-p
+   #:destination-parts
+   #:port
+   #:destination
    #:websocket-p
    #:read-headers
    #:read-body
