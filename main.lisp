@@ -81,13 +81,16 @@
            (destination (funcall (config-destinator config))))
       (when (valid-destination-p destination)
         (multiple-value-bind (host port) (destination-parts destination)
-          (with-open-stream
-              (server (-> (socket-connect
-                           host port :element-type '(unsigned-byte 8))
-                        socket-stream))
-            (if (websocket-p)
-                (websocket-handler client server)
-                (http-handler client server config))))))))
+          (handler-case
+              (with-open-stream
+                  (server (-> (socket-connect
+                               host port :element-type '(unsigned-byte 8))
+                            socket-stream))
+                (if (websocket-p)
+                    (websocket-handler client server)
+                    (http-handler client server config)))
+            (usocket:connection-refused-error ()
+              (format *error-output* "Could not connect to ~A:~A.~%" host port))))))))
 
 (defun ssl-redirect (client config)
   (with-socket-handler-case client
