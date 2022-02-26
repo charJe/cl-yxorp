@@ -21,7 +21,7 @@
 (defun destination-parts (destination)
   (typecase destination
     (port
-     (values "localhost" destination))
+     (values "127.0.0.1" destination))
     (string
      (let ((parts (str:split ":" destination :omit-nulls t)))
        (values (first parts)
