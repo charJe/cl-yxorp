@@ -19,7 +19,7 @@
                          tg:weak-pointer-value
                          bt:thread-alive-p))
                      *threads*))
-    (map 'list
-         (lambda (weak-pointer)
-           (funcall function (tg:weak-pointer-value weak-pointer)))
-         *threads*)))
+    (mapcar
+     (lambda (weak-pointer)
+       (funcall function (tg:weak-pointer-value weak-pointer)))
+     *threads*)))

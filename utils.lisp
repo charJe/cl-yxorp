@@ -54,23 +54,23 @@
    (append (list
             (str:join
              " " (->> top
-                   (map 'list
-                        (lambda (name)
-                          (cdr (assoc name headers))))
+                   (mapcar
+                    (lambda (name)
+                      (cdr (assoc name headers))))
                    (remove nil)
-                   (map 'list 'princ-to-string))))
+                   (mapcar #'princ-to-string))))
            (as-> headers it
              (remove-if (lambda (name)
                           (declare (type keyword name))
                           (member name top))
                         it :key 'car)
-             (map 'list
-                  (lambda (pair)
-                    (str:join
-                     ": " (list
-                           (-> pair car symbol-name str:downcase)
-                           (princ-to-string (cdr pair)))))
-                  it))
+             (mapcar
+              (lambda (pair)
+                (str:join
+                 ": " (list
+                       (-> pair car symbol-name str:downcase)
+                       (princ-to-string (cdr pair)))))
+              it))
            (list +crlf+)))))
   
 (defun parse-header-line (line)
@@ -89,7 +89,7 @@
      (list (cons :method (first first-line))
            (cons :uri (second first-line))
            (cons :http-version (third first-line)))
-     (map 'list 'parse-header-line (rest lines)))))
+     (mapcar #'parse-header-line (rest lines)))))
 
 (defun parse-request-headers (stream)
   (%parse-request-headers (read-headers stream)))
@@ -101,7 +101,7 @@
      (list (cons :http-version (first first-line))
            (cons :status (parse-integer (second first-line)))
            (cons :message (str:join " " (cddr first-line))))
-     (map 'list 'parse-header-line (rest lines)))))
+     (mapcar #'parse-header-line (rest lines)))))
 
 (defun parse-response-headers (stream)
   (let ((response-header-string (read-headers stream)))
@@ -140,57 +140,49 @@
 
 (defun extract-encodings-from (header)
   (declare (keyword header))
-  (some->> header
+  (some-<>> header
     header
-    (str:split ", ")
-    (map 'list 'str:trim)
-    (map 'list 'str:upcase)
-    (map 'list 'make-keyword)
-    (remove-if-not 'encodingp)))
+    (str:split ", " <> :omit-nulls t)
+    (mapcar #'str:trim)
+    (mapcar #'str:upcase)
+    (mapcar #'make-keyword)
+    (remove-if-not #'encodingp)))
 
 (defun extract-charset ()
   (or (some-<>> :content-type
         header
-        (str:split ";")
-        (map 'list 'str:trim)
-        (find "charset" <> :test 'str:starts-with-p)
-        (str:split "=")
+        (str:split ";" <> :omit-nulls t)
+        (mapcar #'str:trim)
+        (find "charset" <> :test #'str:starts-with-p)
+        (str:split "=" <> :omit-nulls t)
         second
         str:upcase
         make-keyword)
       (when (str:containsp "text" (header :content-type))
         :iso-8859-1)))
 
-(defun read-body (stream filter)
-  "Read an http body from STREAM and run it throught FILTER."
-  (let* ((str:*omit-nulls* t)
-         (charset (extract-charset))
-         (transfer-encodings (extract-encodings-from :transfer-encoding))
+(defun how-much-to-read ()
+  (or (header :content-length)
+      
+      0))
+
+(defun forward-body (filter in out)
+  "Read an http body from IN stream and run it throught FILTER.
+FILTER will then send output to the OUT stream."
+  (let* ((transfer-encodings (extract-encodings-from :transfer-encoding))
          (content-encodings (extract-encodings-from :content-encoding))
-         (body (-> stream
-                 (apply-decodings (reverse transfer-encodings))
-                 (apply-decodings (reverse content-encodings))
-                 read-sequence*)))
+         (input-stream
+           (-> in
+             (apply-decodings (reverse transfer-encodings))
+             (apply-decodings (reverse content-encodings))))
+         (output-stream
+           (->> content-encodings
+             (cons :chunked)
+             remove-duplicates
+             (apply-encodings out))))
     (setf (header :transfer-encoding) nil
           (header :content-encoding) content-encodings)
-    (let ((output-body
-            (handler-bind
-                ((flexi-streams:external-format-encoding-error
-                   (lambda (condition) (declare (ignore condition))
-                     (invoke-restart (find-restart 'use-value)
-                                     #\replacement_character))))
-              (-<> body
-                (octets-to-string :external-format (or charset :iso-8859-1))
-                (funcall filter <>)
-                (string-to-octets :external-format (or charset :iso-8859-1))))))
-      (let ((length (length output-body)))
-          (setf (header :content-length)
-                (unless (= 0 length)
-                  length)))
-      (-> output-body
-        flex:make-in-memory-input-stream
-        (apply-encodings content-encodings)
-        read-sequence*))))
+    (funcall filter input-stream output-stream)))
 
 (defun write-headers (stream)
   (-> *headers*

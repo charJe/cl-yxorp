@@ -45,9 +45,9 @@
     (setf (header :accept-encoding)
           (->> :accept-encoding
             extract-encodings-from
-            (remove-if-not 'encodingp)
-            (map 'list 'symbol-name)
-            (map 'list 'str:downcase)
+            (remove-if-not #'encodingp)
+            (mapcar #'symbol-name)
+            (mapcar #'str:downcase)
             (str:join ", ")))
     *headers*))
 
