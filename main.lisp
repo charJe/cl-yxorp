@@ -1,4 +1,4 @@
-(In-package #:yxorp)
+(in-package #:yxorp)
 
 (defvar *suppress-errors* t)
 
