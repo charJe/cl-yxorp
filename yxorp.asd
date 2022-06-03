@@ -10,6 +10,7 @@ programming language)."
   :licence "AGPL3"
   :depends-on
   (#:binding-arrows
+   #:smart-buffer
    #:chipz
    #:chunga
    #:cl+ssl
@@ -23,7 +24,7 @@ programming language)."
   :serial t
   :components
   ((:file "package")
-   (:file "threads")
+   (:file "smart-buffer-stream")
    (:file "coding")
    (:file "utils")
    (:file "config")

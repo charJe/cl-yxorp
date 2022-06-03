@@ -65,74 +65,156 @@
                      (str:concat "for=" ip)))
          headers))))
 
-(defun proxy-handler (client config)
-  (track-thread (bt:current-thread))
-  (with-socket-handler-case client
-    (let* ((client (if (ssl-config-p (config-ssl config))
-                       (make-ssl-stream client config)
-                       client))
-           (*headers*
-             (-> client
-               parse-request-headers
-               save-ip
-               alist->ht
-               filter-encodings))
-           (*request-headers* *headers*)
-           (destination (funcall (config-destinator config))))
-      (when (valid-destination-p destination)
-        (multiple-value-bind (host port) (destination-parts destination)
+(defclass server ()
+  ((conifg :type config :initarg :config :reader server-config
+           :initform (alexandria:required-argument "config"))
+   (connections :initform (list) :accessor server-connections)
+   adder
+   workers
+   (add-delete-lock :initform (bt:make-lock) :accessor add-delete-lock)))
+
+(defclass connection ()
+  ((lock :initform (bt:make-lock) :accessor connection-lock)
+   (source :initarg :client :type usocket:socket :reader source-socket)
+   (source-stream :type stream :accessor source-stream)
+   (destination :initarg :client :type usocket:socket :reader destination-socket)
+   (destination-stream :type (or null stream) :accessor destination-stream)
+   (buffer :initform (smart-buffer:make-smart-buffer)
+           :accessor connection-buffer)
+   (header-mode :initform t :reader header-mode-p)
+   (previous-byte2 :initform 0)
+   (previous-byte :initform 0)
+   (gc :initform nil :type boolean :accessor connection-gc)))
+
+(defclass client-connection (connection) ())
+(defclass server-connection (connection) ())
+
+(defmethod body-mode-p ((obj connection))
+  (not (header-mode-p obj)))
+
+(defmethod (setf previous-byte) (byte (obj connection))
+  (setf (slot-value obj 'previous-byte2) (slot-value obj 'previous-byte)
+        (slot-value obj 'previous-byte) byte))
+
+(defmethod headers-done-p ((obj connection))
+  (ignore-errors
+   (and (= (slot-value obj 'previous-byte2)
+           (char-code #\return))
+        (= (slot-value obj 'previous-byte)
+            (char-code #\newline)))))
+
+(defmethod source-stream ((obj connection))
+  (usocket:socket-stream (source-socket obj)))
+
+(defmethod destination-stream ((obj connection))
+  (usocket:socket-stream (destination-socket obj)))
+
+(defmethod add-thread-handler ((client usocket:usocket) (obj server))
+  (bt:with-lock-held ((add-delete-lock obj))
+    (push (make-instance 'client-connection :client client)
+          (server-connections obj))))
+
+(defmacro with-lock-held-no-wait ((place) &body body)
+  (let ((lock (gensym)))
+    `(let ((,lock ,place))
+       (when (bt:acquire-lock ,lock nil)
+         (unwind-protect ,@body
+           (bt:release-lock ,lock))))))
+
+(defmethod header-mode ((obj connection))
+  (setf (connection-buffer obj) (smart-buffer:make-smart-buffer)
+        (previous-byte obj) 0
+        (slot-value obj 'destination) nil
+        (destination-stream obj) nil
+        (slot-value obj 'header-mode) t))
+
+(defmethod body-mode ((obj connection))
+  (setf (connection-buffer obj) (smart-buffer:make-smart-buffer)
+        (previous-byte obj) 0
+        (source-stream obj) (apply-encodings (source-stream obj) )
+        (slot-value obj 'destination) nil
+        (destination-stream obj) nil
+        (slot-value obj 'header-mode) nil))
+
+(defmethod work ((obj server))
+  (loop for connections = (server-connections obj) do
+    (loop for connection in connections do
+      (with-lock-held-no-wait ((connection-lock connection))
+        (unless (connection-gc connection)
           (handler-case
-              (with-open-stream
-                  (server (-> (socket-connect
-                               host port :element-type '(unsigned-byte 8))
-                            socket-stream))
-                (if (websocket-p)
-                    (websocket-handler client server)
-                    (http-handler client server config)))
-            (usocket:connection-refused-error ()
-              (format *error-output* "Could not connect to ~A:~A.~%" host port))))))))
+              (loop with buffer = (make-instance 'smart-buffer-stream
+                                                 :buffer (connection-buffer connection))
+                    with input = (source-stream connection)
+                    while (listen input)
+                    for byte = (read-byte input)
+                    while byte do
+                      (setf (previous-byte connection) byte)
+                      (write-byte byte buffer)
+                      (cond
+                        ((and (header-mode-p connection)
+                              (headers-done-p connection))
+                         (body-mode connection))
+                        ((and (body-mode-p connection)
+                              (body-done-p connection))
+                         (send connection (server-config obj))
+                         (typecase connection
+                           (server-connection
+                            (setf (connection-gc connection) t))
+                           (client-connection
+                            (header-mode connection))))))
+            (stream-error ()
+              (setf (connection-gc connection) t))))))))
 
-(defun ssl-redirect (client config)
-  (with-socket-handler-case client
-    (let* ((*headers* (alist->ht (parse-request-headers client)))
-           (destination (-> config config-ssl ssl-config-redirect-to)))
-      (setq *headers*
-            (alist->ht
-             (list (cons :http-version "HTTP/1.1") (cons :status 301) (cons :message "Moved Permanently")
-                   (cons :location
-                         (str:concat
-                          "https://" (first (str:split ":" (header :host) :omit-nulls t))
-                          (when (/= 433 destination)
-                            (format nil ":~A" destination))
-                          (header :uri))))))
-      (write-headers client))))
+(defmethod make-worker ((obj server))
+  (lambda () (work obj)))
 
-(defun start (config
-              &aux (config
-                    (cond ((stringp config) (read-config config))
-                          ((config-p config) config)
-                          (:else (config)))))
-  (flet ((server (port handler name)
-           (handler-case
-               (track-thread
-                (socket-server
-                 usocket:*wildcard-host* port
-                 handler (list config)
-                 :element-type '(unsigned-byte 8)
-                 :multi-threading t
-                 :in-new-thread t
-                 :name name))
-             (address-in-use-error ()
-               (format *error-output* "Port ~A is already being used by another program. Edit your configuration to use a different port or stop the other program.~%"
-                       port)))))
-    (some-> config
-      config-ssl
-      ssl-config-redirect-port
-      (server 'ssl-redirect "YXORP SSL Redirect"))
-    (server (config-port config) 'proxy-handler "YXORP Server")))
+(defun event-loop (port handler arguments)
+  (bt:make-thread
+   (lambda ()
+     (let* ((element-type '(unsigned-byte 8))
+            (socket (usocket:socket-listen
+                     usocket:*wildcard-host* port
+                     :element-type element-type)))
+       (unwind-protect
+            (loop
+              (let ((client-socket (usocket:socket-accept
+                                    socket :element-type element-type)))
+                (apply handler client-socket arguments)))
+         (usocket:socket-close socket))))
+   :name "YXORP Server"))
 
-(defun stop ()
-  (map-threads #'bt:destroy-thread))
+(defun start (config)
+  (let ((config
+          (cond ((stringp config) (read-config config))
+                ((config-p config) config)
+                (t (config)))))
+    (handler-case
+        (let ((server (make-instance 'server)))
+          (prog1 server
+            (setf (slot-value server 'adder)
+                  (event-loop (config-port config)
+                   #'add-thread-handler (list server))
+                  (slot-value server 'workers)
+                  (loop repeat (config-workers config)
+                        collect
+                        (bt:make-thread (make-worker server)
+                         :name "YXORP Worker")))))
+      (address-in-use-error ()
+        (format *error-output* "Port ~A is already being used by another program. Edit your configuration to use a different port or stop the other program.~%"
+                (config-port config))))))
+
+(defmethod clean-up ((obj connection))
+  (close (source-stream obj) :abort t)
+  (usocket:socket-close (source-socket obj)))
+
+(defmethod stop ((obj server))
+  (flet ((destory (thread)
+           (when (bt:thread-alive-p thread)
+             (bt:destroy-thread thread))))
+    (destory (slot-value obj 'adder))
+    (mapc #'destory (slot-value obj 'workers))
+    (mapc #'clean-up (server-connections obj))
+    (setf (server-connections obj) (list))))
 
 (defun main (&aux (args (uiop:command-line-arguments)))
   (start (nth 0 args))
@@ -147,4 +229,3 @@
      #+clozure ccl:interrupt-signal-condition
      #+ecl interrupt-signal-condition
      () (uiop:quit))))
-

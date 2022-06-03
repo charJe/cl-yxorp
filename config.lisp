@@ -48,14 +48,24 @@
   (port 8080
    :type port
    :read-only t)
+  (workers 4
+   :type integer
+   :read-only t)
   (destinator (lambda () 8081)
-   :type (or (function () destination) symbol)
+   :type (or (function () destination)
+             symbol)
    :read-only t)
-  (request-filter (lambda (body) body)
-   :type (or (function (string) string) symbol)
+  (request-filter (lambda (in out)
+                    (write-headers out)
+                    (forward-stream in out))
+   :type (or (function (stream stream))
+             symbol)
    :read-only t)
-  (response-filter (lambda (body) body)
-   :type (or (function (string) string) symbol)
+  (response-filter (lambda (in out)
+                     (write-headers out)
+                     (forward-stream in out))
+   :type (or (function (stream stream))
+             symbol)
    :read-only t)
   (ssl nil
    :type (or ssl-config null)
