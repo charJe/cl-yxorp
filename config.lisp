@@ -55,17 +55,9 @@
    :type (or (function () destination)
              symbol)
    :read-only t)
-  (request-filter (lambda (in out)
-                    (write-headers out)
-                    (forward-stream in out))
-   :type (or (function (stream stream))
-             symbol)
+  (request-processor nil
    :read-only t)
-  (response-filter (lambda (in out)
-                     (write-headers out)
-                     (forward-stream in out))
-   :type (or (function (stream stream))
-             symbol)
+  (response-processor nil
    :read-only t)
   (ssl nil
    :type (or ssl-config null)

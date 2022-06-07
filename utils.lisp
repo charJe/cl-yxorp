@@ -1,11 +1,8 @@
 (in-package #:yxorp)
 
-(defvar +crlf+
-  (coerce (list (code-char 13) (code-char 10)) 'string))
-
 (declaim (hash-table *request-headers*))
 (defvar *request-headers*)
-(declaim (hash-table *response-headers*))
+(declaim ((or null hash-table) *response-headers*))
 (defvar *response-headers*)
 (declaim (hash-table *headers*))
 (defvar *headers*)
@@ -74,53 +71,59 @@
            (list +crlf+)))))
   
 (defun parse-header-line (line)
-  (declare (type string line))
+  (declare (string line))
   (let* ((pair (str:split ": " line :omit-nulls t))
          (name (make-keyword (first pair))))
-    (cons name
-          (if (member name *integer-headers*)
-              (parse-integer (second pair))
-              (second pair)))))
+    (values name
+            (if (member name *integer-headers*)
+                (parse-integer (second pair))
+                (second pair)))))
 
-(defun %parse-request-headers (string)
-  (let* ((lines (str:split +crlf+ string :omit-nulls t))
-         (first-line (str:split " " (first lines))))
-    (append
-     (list (cons :method (first first-line))
-           (cons :uri (second first-line))
-           (cons :http-version (third first-line)))
-     (mapcar #'parse-header-line (rest lines)))))
+(defun parse-headers (specials stream)
+  (loop with headers = (make-hash-table)
+        for line = (read-line stream)
+        for first-line = t then nil
+        while (< 0 (length line)) do
+          (if first-line
+              (let ((parts (str:split " " line)))
+                (mapc (lambda (name value)
+                        (setf (gethash name headers) value))
+                      specials parts))
+              (multiple-value-bind
+                    (name value) (parse-header-line line)
+                (setf (gethash name headers) value)))
+        finally (return headers)))
+
+(defparameter *request-specials*
+  '(:method :uri :http-version))
+
+(defparameter *response-specials*
+  '(:http-version :status :message))
 
 (defun parse-request-headers (stream)
-  (%parse-request-headers (read-headers stream)))
-
-(defun %parse-response-headers (string)
-  (let* ((lines (str:split +crlf+ string :omit-nulls t))
-         (first-line (str:split " " (first lines))))
-    (append
-     (list (cons :http-version (first first-line))
-           (cons :status (parse-integer (second first-line)))
-           (cons :message (str:join " " (cddr first-line))))
-     (mapcar #'parse-header-line (rest lines)))))
-
+  (parse-headers *request-specials* stream))
+                 
 (defun parse-response-headers (stream)
-  (let ((response-header-string (read-headers stream)))
-    (when (str:blankp response-header-string)
-      (abort))
-    (%parse-response-headers response-header-string)))
+  (parse-headers *response-specials* stream))
 
-(defun read-headers (stream)
-  (loop with end = (the simple-string (reverse (str:concat +crlf+ +crlf+)))
-        with chars = (list)
-        until (and (nth 4 chars)
-                   (string= (coerce (subseq chars 0 4)
-                                    'simple-string)
-                            end))
-        for byte = (read-byte stream nil)
-        while byte
-        for char = (code-char byte) do
-          (push char chars)
-        finally (return (coerce (reverse chars) 'string))))
+(defun %write-headers (specials headers stream)
+  (write-line (str:join
+               " " (mapcar (lambda (key)
+                             (gethash key headers))
+                           specials))
+              stream)
+  (maphash
+   (lambda (key value)
+     (unless (member key specials)
+       (format stream "~A: ~A~%" key value)))
+   headers)
+  (terpri stream))
+
+(defun write-request-headers (headers stream)
+  (%write-headers *request-specials* headers stream))
+
+(defun write-response-headers (headers stream)
+  (%write-headers *response-specials* headers stream))
 
 (defun forward-stream (origin destination)
   (loop for byte = (ignore-errors
@@ -183,14 +186,6 @@ FILTER will then send output to the OUT stream."
     (setf (header :transfer-encoding) nil
           (header :content-encoding) content-encodings)
     (funcall filter input-stream output-stream)))
-
-(defun write-headers (stream)
-  (-> *headers*
-    ht->alist
-    serialize-headers
-    string-to-octets
-    (write-sequence stream))
-  (force-output stream))
 
 (defun write-body-and-headers (body stream)
   (declare (type (or vector null) body))

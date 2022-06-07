@@ -30,4 +30,4 @@
     (otherwise stream)))
 
 (defun apply-encodings (stream encodings)
-  (reduce 'apply-encoding encodings :initial-value stream))
+  (reduce #'apply-encoding encodings :initial-value stream))

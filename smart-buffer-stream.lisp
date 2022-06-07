@@ -1,10 +1,12 @@
 (in-package #:yxorp)
 
-(defclass smart-buffer-stream (trivial-gray-streams:fundamental-character-input-stream)
+(defclass smart-buffer-stream (trivial-gray-streams:fundamental-output-stream)
   ((smart-buffer :initarg :buffer
-                 :initform (error "SMART-BUFFER-STREAM must have a buffer."))))
+                 :initform (error "SMART-BUFFER-STREAM must have a buffer."))
+   (size :initform 0 :accessor size)))
 
 (defmethod trivial-gray-streams:stream-write-byte ((stream smart-buffer-stream) byte)
+  (incf (size stream))
   (smart-buffer:write-to-buffer
    (slot-value stream 'smart-buffer)
    (make-array 1 :element-type '(unsigned-byte 8)
@@ -14,25 +16,24 @@
                  :displaced-to nil)))
 
 (defmethod trivial-gray-streams:stream-write-char ((stream smart-buffer-stream) char)
-  (smart-buffer:write-to-buffer
-   (slot-value stream 'smart-buffer)
-   (flex:string-to-octets (string char)
-                          :external-format :utf8)))
-
-(defmethod trivial-gray-streams:stream-write-sequence ((stream smart-buffer-stream) sequence start end &key &allow-other-keys)
-  (smart-buffer:write-to-buffer
-   (slot-value stream 'smart-buffer)
-   sequence
-   (or start 0)
-   (or end (length sequence))))
-
-(defmethod trivial-gray-streams:stream-write-string ((stream smart-buffer-stream) string &optional start end)
-  (let ((octets (flex:string-to-octets string
+  (let ((octets (flex:string-to-octets (string char)
                                        :external-format :utf8)))
+    (incf (size stream) (length octets))
     (smart-buffer:write-to-buffer
      (slot-value stream 'smart-buffer)
-     octets
-     (or start 0)
-     (if (eql end (length string))
-         (length octets)
-         (or end (length octets))))))
+     octets)))
+
+(defmethod trivial-gray-streams:stream-write-sequence ((stream smart-buffer-stream) sequence start end &key &allow-other-keys)
+  (let ((start (or start 0))
+        (end (or end (length sequence))))
+    (incf (size stream) (- end start))
+    (smart-buffer:write-to-buffer
+     (slot-value stream 'smart-buffer)
+     sequence start end)))
+
+(defmethod trivial-gray-streams:stream-write-string ((stream smart-buffer-stream) string &optional (start 0) end)
+  (let ((octets (flex:string-to-octets (subseq string start end) :external-format :utf8)))
+    (incf (size stream) (length octets))
+    (smart-buffer:write-to-buffer
+     (slot-value stream 'smart-buffer)
+     octets)))
