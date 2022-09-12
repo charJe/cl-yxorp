@@ -8,14 +8,14 @@
 (defun encodingp (thing)
   (typep thing 'encoding))
 
-(defun decode-chunked (stream)
+(defun chunkify (stream)
   (let ((chunked (chunga:make-chunked-stream stream)))
     (setf (chunga:chunked-stream-input-chunking-p chunked) t)
     chunked))
 
 (defun apply-decoding (stream encoding)
   (case encoding
-    (:chunked (decode-chunked stream))
+    (:chunked (chunkify stream))
     (:gzip (chipz:make-decompressing-stream :gzip stream))
     (:deflate (chipz:make-decompressing-stream :deflate stream))
     (otherwise stream)))
@@ -25,6 +25,7 @@
 
 (defun apply-encoding (stream encoding)
   (case encoding
+    (:chunked (chunkify stream))
     (:gzip (salza2:make-compressing-stream :gzip stream))
     (:deflate (salza2:make-compressing-stream :deflate stream))
     (otherwise stream)))

@@ -33,12 +33,10 @@
   (forward-stream client server))
 
 (defun http-handler (client server config)
-  (let ((body (read-body client (config-request-filter config))))
-    (write-body-and-headers body server))
+  (handle-headers-and-body client server (config-request-filter config))
   (let* ((*headers* (alist->ht (parse-response-headers server)))
-         (*response-headers* *headers*)
-         (body (read-body server (config-response-filter config))))
-    (write-body-and-headers body client)))
+         (*response-headers* *headers*))
+    (handle-headers-and-body server client (config-response-filter config))))
 
 (defun filter-encodings (headers)
   (let* ((*headers* headers))

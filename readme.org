@@ -19,10 +19,13 @@ See =config.lisp= for what the default values are.
          8082 ;; forward to port 8082, you better be running a websocket server there
          8081)) ;; else forward to port 8081 where you should be running an http server
    :response-filter
-   (lambda (body) ;; run all http utf-8 responses through this function
-     (if (= 200 (header :status)) ;; if the response status is 200
-         (str:concat body "!") ;; append exclaimation to the response body
-         body)) ;; else just send the unchanged response body
+   (lambda (in out) ;; run all http utf-8 responses through this function
+     ;; forward the original content
+     (uiop:copy-stream-to-stream 
+      in out
+      :element-type '(unsigned-byte 8))
+     (when (= 200 (header :status)) ;; if the response status is 200
+       (format out "!"))) ;; append exclaimation to the response body
    :ssl (ssl-config ;; enable HTTPS
          :certificate "localhost.crt" ;; path to the cert file
          :key "localhost.key" ;; path to the key file

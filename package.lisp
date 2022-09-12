@@ -19,6 +19,8 @@
   (:import-from #:rutils
                 #:alist->ht
                 #:ht->alist)
+  (:import-from #:smart-buffer
+                #:make-smart-buffer)
   (:export
    #:*suppress-errors*
    #:header
@@ -37,7 +39,6 @@
    #:destination
    #:websocket-p
    #:read-headers
-   #:read-body
    #:write-headers
    #:write-body-and-headers
    #:track-thread

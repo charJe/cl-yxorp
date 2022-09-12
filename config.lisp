@@ -51,11 +51,9 @@
   (destinator (lambda () 8081)
    :type (or (function () destination) symbol)
    :read-only t)
-  (request-filter (lambda (body) body)
-   :type (or (function (string) string) symbol)
+  (request-filter nil
    :read-only t)
-  (response-filter (lambda (body) body)
-   :type (or (function (string) string) symbol)
+  (response-filter nil
    :read-only t)
   (ssl nil
    :type (or ssl-config null)

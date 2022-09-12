@@ -72,7 +72,7 @@
                            (princ-to-string (cdr pair)))))
                   it))
            (list +crlf+)))))
-  
+
 (defun parse-header-line (line)
   (declare (type string line))
   (let* ((pair (str:split ": " line :omit-nulls t))
@@ -161,36 +161,55 @@
       (when (str:containsp "text" (header :content-type))
         :iso-8859-1)))
 
-(defun read-body (stream filter)
-  "Read an http body from STREAM and run it throught FILTER."
+(defun copy-stream-to-stream (in out length)
+  (loop
+    with left-to-read = length
+    with buffer-size = 8192
+    with buffer = (make-array (list buffer-size) :element-type '(unsigned-byte 8))
+    for end = (read-sequence buffer in :end (min left-to-read buffer-size))
+    until (zerop end)
+    do (decf left-to-read end)
+       (write-sequence buffer out :end end)
+        (when (< end buffer-size) (return))))
+
+(defun handle-headers-and-body (in out filter)
+  "Read an http body from IN, run it through FILTER, and write headers and it to OUT."
   (let* ((str:*omit-nulls* t)
-         (charset (extract-charset))
          (transfer-encodings (extract-encodings-from :transfer-encoding))
          (content-encodings (extract-encodings-from :content-encoding))
-         (body (-> stream
-                 (apply-decodings (reverse transfer-encodings))
-                 (apply-decodings (reverse content-encodings))
-                 read-sequence*)))
-    (setf (header :transfer-encoding) nil
-          (header :content-encoding) content-encodings)
-    (let ((output-body
-            (handler-bind
-                ((flexi-streams:external-format-encoding-error
-                   (lambda (condition) (declare (ignore condition))
-                     (invoke-restart (find-restart 'use-value)
-                                     #\replacement_character))))
-              (-<> body
-                (octets-to-string :external-format (or charset :iso-8859-1))
-                (funcall filter <>)
-                (string-to-octets :external-format (or charset :iso-8859-1))))))
-      (let ((length (length output-body)))
-          (setf (header :content-length)
-                (unless (= 0 length)
-                  length)))
-      (-> output-body
-        flex:make-in-memory-input-stream
-        (apply-encodings content-encodings)
-        read-sequence*))))
+         (input (-> in
+                  (apply-decodings (reverse transfer-encodings))
+                  (apply-decodings (reverse content-encodings))))
+         (read (lambda (input out)
+                 (let ((encoded-output (apply-encodings out content-encodings)))
+                   (if (null (header :transfer-encoding))
+                       (progn
+                         (setf (header :transfer-encoding) nil)
+                         (write-headers out)
+                         (copy-stream-to-stream input encoded-output
+                                                (or (header :content-length)0)))
+                       (progn
+                         (setf (header :transfer-encoding) nil)
+                         (write-headers out)
+                         (uiop:copy-stream-to-stream
+                          input encoded-output
+                          :element-type '(unsigned-byte 8))))
+                   (finish-output encoded-output)))))
+    (setf (header :content-encoding) content-encodings)
+    (if (null filter)
+        (funcall read in out)
+        (let* ((buffer (make-smart-buffer))
+               (buffer-stream (make-instance 'smart-buffer-stream :buffer buffer)))
+          (funcall read input buffer-stream)
+          (setf (header :transfer-encoding) :chunked
+                (header :content-length) nil)
+          (let ((input (flex:make-flexi-stream (smart-buffer:finalize-buffer buffer)
+                                               :external-format :utf8))
+                (encoded-output (flex:make-flexi-stream
+                                 (apply-encodings out (append content-encodings (list :chunked)))
+                                 :external-format :utf8)))
+            (funcall filter input encoded-output)
+            (finish-output encoded-output))))))
 
 (defun write-headers (stream)
   (-> *headers*

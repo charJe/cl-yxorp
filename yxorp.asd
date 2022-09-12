@@ -16,6 +16,7 @@ programming language)."
    #:flexi-streams
    #:rutils
    #:salza2
+   #:smart-buffer
    #:str
    #:trivial-garbage
    #:usocket
@@ -23,6 +24,7 @@ programming language)."
   :serial t
   :components
   ((:file "package")
+   (:file "smart-buffer-stream")
    (:file "threads")
    (:file "coding")
    (:file "utils")
