@@ -27,6 +27,6 @@ programming language)."
    (:file "smart-buffer-stream")
    (:file "threads")
    (:file "coding")
-   (:file "utils")
    (:file "config")
+   (:file "utils")
    (:file "main")))

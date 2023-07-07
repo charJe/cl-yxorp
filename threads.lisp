@@ -1,7 +1,7 @@
 (in-package #:yxorp)
 
 (defvar *threads*-lock (bt:make-lock))
-(defvar *threads* (list))
+(defvar *threads* '())
 
 (defun track-thread (thread)
   (bt:with-lock-held (*threads*-lock)
