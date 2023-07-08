@@ -28,7 +28,7 @@
        (let ((seq (make-array content-length :element-type '(unsigned-byte 8))))
          (read-sequence seq stream :end content-length)
          seq))
-      (:else
+      (t
        (loop with result = (list)
              for byte = (handler-case (read-byte stream nil nil)
                           (end-of-file nil))
@@ -101,7 +101,7 @@
      (list (cons :http-version (first first-line))
            (cons :status (parse-integer (second first-line)))
            (cons :message (str:join " " (cddr first-line))))
-     (map 'list 'parse-header-line (rest lines)))))
+     (map 'list #'parse-header-line (rest lines)))))
 
 (defun parse-response-headers (stream)
   (let ((response-header-string (read-headers stream)))
@@ -143,17 +143,17 @@
   (some->> header
     header
     (str:split ", ")
-    (map 'list 'str:trim)
-    (map 'list 'str:upcase)
-    (map 'list 'make-keyword)
-    (remove-if-not 'encodingp)))
+    (map 'list (compose #'make-keyword
+                        #'str:upcase
+                        #'str:trim))
+    (remove-if-not #'encodingp)))
 
 (defun extract-charset ()
   (or (some-<>> :content-type
         header
         (str:split ";")
-        (map 'list 'str:trim)
-        (find "charset" <> :test 'str:starts-with-p)
+        (map 'list #'str:trim)
+        (find "charset" <> :test #'str:starts-with-p)
         (str:split "=")
         second
         str:upcase
@@ -162,15 +162,14 @@
         :iso-8859-1)))
 
 (defun copy-stream-to-stream (in out length)
-  (loop
-    with left-to-read = length
-    with buffer-size = 8192
-    with buffer = (make-array (list buffer-size) :element-type '(unsigned-byte 8))
-    for end = (read-sequence buffer in :end (min left-to-read buffer-size))
-    until (zerop end)
-    do (decf left-to-read end)
-       (write-sequence buffer out :end end)
-        (when (< end buffer-size) (return))))
+  (let* ((left-to-read length)
+         (buffer-size 8192)
+         (buffer (make-array (list buffer-size) :element-type '(unsigned-byte 8))))
+    (loop for end = (read-sequence buffer in :end (min left-to-read buffer-size)) do
+      (decf left-to-read end)
+      (write-sequence buffer out :end end)
+      (when (< end buffer-size)
+        (return)))))
 
 (defun handle-headers-and-body (in out filter)
   "Read an http body from IN, run it through FILTER, and write headers and it to OUT."
@@ -184,30 +183,36 @@
                  (let ((encoded-output (apply-encodings out content-encodings)))
                    (if (null (header :transfer-encoding))
                        (progn
-                         (setf (header :transfer-encoding) nil)
                          (write-headers out)
+                         (finish-output out)
                          (copy-stream-to-stream input encoded-output
-                                                (or (header :content-length)0)))
+                                                (or (header :content-length) 0)))
                        (progn
                          (setf (header :transfer-encoding) nil)
                          (write-headers out)
+                         (finish-output out)
                          (uiop:copy-stream-to-stream
                           input encoded-output
                           :element-type '(unsigned-byte 8))))
                    (finish-output encoded-output)))))
-    (setf (header :content-encoding) content-encodings)
+    (setf (header :content-encoding)
+          (some->> content-encodings
+            (str:join ", ")))
     (if (null filter)
-        (funcall read in out)
+        (funcall read input out)
         (let* ((buffer (make-smart-buffer))
                (buffer-stream (make-instance 'smart-buffer-stream :buffer buffer)))
           (funcall read input buffer-stream)
           (setf (header :transfer-encoding) :chunked
                 (header :content-length) nil)
-          (let ((input (flex:make-flexi-stream (smart-buffer:finalize-buffer buffer)
-                                               :external-format :utf8))
-                (encoded-output (flex:make-flexi-stream
-                                 (apply-encodings out (append content-encodings (list :chunked)))
-                                 :external-format :utf8)))
+          (let ((input
+                  (flex:make-flexi-stream
+                   (smart-buffer:finalize-buffer buffer)
+                   :external-format :utf8))
+                (encoded-output
+                  (flex:make-flexi-stream
+                   (apply-encodings out (append content-encodings (list :chunked)))
+                   :external-format :utf8)))
             (funcall filter input encoded-output)
             (finish-output encoded-output))))))
 

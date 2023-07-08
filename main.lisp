@@ -54,9 +54,9 @@
             headers
             :key (lambda (cons)
                    (symbol-name (car cons)))
-            :test 'str:containsp)
+            :test #'str:containsp)
       headers
-      (let ((ip (str:join "." (map 'list 'princ-to-string usocket:*remote-host*))))
+      (let ((ip (str:join "." (map 'list #'princ-to-string usocket:*remote-host*))))
         (append
          (list (cons :x-forwarded-for ip))
          (list (cons :forwarded
@@ -127,7 +127,7 @@
       config-ssl
       ssl-config-redirect-port
       (server 'ssl-redirect "YXORP SSL Redirect"))
-    (server (config-port config) 'proxy-handler "YXORP Server")))
+    (server (config-port config) #'proxy-handler "YXORP Server")))
 
 (defun stop ()
   (map-threads #'bt:destroy-thread))
@@ -145,4 +145,3 @@
      #+clozure ccl:interrupt-signal-condition
      #+ecl interrupt-signal-condition
      () (uiop:quit))))
-
