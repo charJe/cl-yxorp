@@ -39,14 +39,8 @@
     (handle-headers-and-body server client (config-response-filter config))))
 
 (defun filter-encodings (headers)
-  (let* ((*headers* headers))
-    (setf (header :accept-encoding)
-          (->> :accept-encoding
-            extract-encodings-from
-            (remove-if-not 'encodingp)
-            (map 'list 'symbol-name)
-            (map 'list 'str:downcase)
-            (str:join ", ")))
+  (let ((*headers* headers))
+    (setf (header :accept-encoding) nil)
     *headers*))
 
 (defun save-ip (headers)
