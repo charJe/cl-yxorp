@@ -36,6 +36,15 @@ See =config.lisp= for what the default values are.
 
 If there are any headers that you would like to be automatically converted to integers, ~push~ the header keyword to the ~*integer-headers*~ variable.
 
+** What can my destinator return?
+- <port> : Forward another port on the same server that yxorp is running.
+- "<hostname>:<port>" : Forward to a different hostname and port.
+- "<protocol>://<hostname>:<port>" : Forward to a different hostname, port, and protocol.
+- "<protocol>://<hostname>" : Same as previous. The port is the default port for the protocol.
+
+If the protocol is not provided, insecure is assumed.
+
+
 * Building For Command Line Use
 
 #+BEGIN_SRC sh

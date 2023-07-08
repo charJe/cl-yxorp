@@ -70,33 +70,44 @@
                alist->ht
                filter-encodings))
            (*request-headers* *headers*)
-           (destination (funcall (config-destinator config))))
-      (when (valid-destination-p destination)
-        (multiple-value-bind (host port) (destination-parts destination)
+           (destination
+             (make-destination (funcall (config-destinator config)))))
+      (when destination
+        (setf (header :host)
+              (format nil "~A:~A" (host destination) (port destination)))
+        (let ((host (host destination))
+              (port (port destination)))
           (handler-case
-              (with-open-stream
-                  (server (-> (socket-connect
-                               host port :element-type '(unsigned-byte 8))
-                            socket-stream))
+              (let ((stream (socket-stream
+                             (socket-connect
+                              host port :element-type '(unsigned-byte 8)))))
+                (with-open-stream
+                    (server (if (destination-secure-p destination)
+                                (cl+ssl:make-ssl-client-stream stream)
+                                stream))
                 (if (websocket-p)
                     (websocket-handler client server)
-                    (http-handler client server config)))
+                    (http-handler client server config))))
             (usocket:connection-refused-error ()
-              (format *error-output* "Could not connect to ~A:~A.~%" host port))))))))
+              (format *error-output* "Could not connect to ~A.~%" destination))))))))
 
 (defun ssl-redirect (client config)
   (with-socket-handler-case client
     (let* ((*headers* (alist->ht (parse-request-headers client)))
-           (destination (-> config config-ssl ssl-config-redirect-to)))
+           (redirect-to (-> config config-ssl ssl-config-redirect-to)))
       (setq *headers*
             (alist->ht
              (list (cons :http-version "HTTP/1.1") (cons :status 301) (cons :message "Moved Permanently")
                    (cons :location
                          (str:concat
-                          "https://" (first (str:split ":" (header :host) :omit-nulls t))
-                          (when (/= 433 destination)
-                            (format nil ":~A" destination))
-                          (header :uri))))))
+                          (format
+                           nil "~A"
+                           (make-instance
+                            'destination
+                            :protocol 'https
+                            :host (first (str:split ":" (header :host) :omit-nulls t))
+                            :port redirect-to))))
+                   (header :uri))))
       (write-headers client))))
 
 (defun start (config
