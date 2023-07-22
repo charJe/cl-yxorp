@@ -16,19 +16,21 @@
 (defun apply-decoding (stream encoding)
   (case encoding
     (:chunked (chunkify stream))
-    (:gzip (chipz:make-decompressing-stream :gzip stream))
-    (:deflate (chipz:make-decompressing-stream :deflate stream))
+    (:gzip (chipz:make-decompressing-stream 'chipz:gzip stream))
+    (:deflate (chipz:make-decompressing-stream 'chipz:deflate stream))
     (otherwise stream)))
 
 (defun apply-decodings (stream decodings)
-  (reduce 'apply-decoding decodings :initial-value stream))
+  (reduce #'apply-decoding decodings :initial-value stream))
 
 (defun apply-encoding (stream encoding)
   (case encoding
     (:chunked (chunkify stream))
-    (:gzip (salza2:make-compressing-stream :gzip stream))
-    (:deflate (salza2:make-compressing-stream :deflate stream))
+    (:gzip (salza2:make-compressing-stream
+            'salza2:gzip-compressor stream))
+    (:deflate (salza2:make-compressing-stream
+               'salza2:deflate-compressor stream))
     (otherwise stream)))
 
 (defun apply-encodings (stream encodings)
-  (reduce 'apply-encoding encodings :initial-value stream))
+  (reduce #'apply-encoding encodings :initial-value stream))

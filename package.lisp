@@ -21,6 +21,8 @@
                 #:ht->alist)
   (:import-from #:smart-buffer
                 #:make-smart-buffer)
+  (:import-from #:alexandria
+                #:compose)
   (:export
    #:*suppress-errors*
    #:header

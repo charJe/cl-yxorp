@@ -5,7 +5,7 @@
 HTTP to HTTPS redirecting, port and host forwarding configuration using a real
 programming language, HTTP header and body manipulation (also using a real
 programming language)."
-  :version "1.0"
+  :version "1.1"
   :author "Charles Jackson <charles.b.jackson@protonmail.com>"
   :licence "AGPL3"
   :depends-on
@@ -27,6 +27,6 @@ programming language)."
    (:file "smart-buffer-stream")
    (:file "threads")
    (:file "coding")
-   (:file "utils")
    (:file "config")
+   (:file "utils")
    (:file "main")))

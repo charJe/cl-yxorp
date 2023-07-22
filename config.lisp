@@ -3,29 +3,74 @@
 (deftype port ()
   'integer)
 
-(deftype destination ()
-  '(or string port null))
+(deftype secure-protocol ()
+  '(member :https :wss))
 
-(defun valid-destination-p (destination)
-  (typecase destination
-    (null nil)
-    (port t)
-    (string
-     (handler-case
-         (-<> destination
-           (str:split ":" <> :omit-nulls t)
-           second
-           parse-integer)
-       (parse-error nil)))))
+(deftype protocol ()
+  '(or
+    (member :http :ws)
+    secure-protocol))
 
-(defun destination-parts (destination)
-  (typecase destination
-    (port
-     (values "127.0.0.1" destination))
-    (string
-     (let ((parts (str:split ":" destination :omit-nulls t)))
-       (values (first parts)
-               (parse-integer (second parts)))))))
+(deftype destination-specifier ()
+  '(or string port))
+
+(defclass destination ()
+  ((protocol
+    :reader protocol
+    :initarg :protocol
+    :initform :http
+    :type protocol)
+   (host
+    :reader host
+    :initarg :host
+    :initform "127.0.0.1"
+    :type string)
+   (port
+    :reader port
+    :initarg :port
+    :type (or null port))))
+
+(defmethod print-object ((obj destination) out)
+  (format out "~(~A~)://~A:~A"
+          (protocol obj)
+          (host obj)
+          (port obj)))
+
+(defun default-protocol-port (protocol)
+  (case protocol
+    ((:https :wss) 443)
+    (otherwise 80)))
+
+(defun make-destination (destination-specifier)
+  (if (typep destination-specifier 'port)
+      (make-instance 'destination :port destination-specifier)
+      (flet ((make-destination-with-protocol (protocol specifier)
+               (let ((destination-parts (str:split-omit-nulls ":" specifier)))
+                 (case (length destination-parts)
+                   (1  (make-instance
+                        'destination
+                        :protocol protocol
+                        :host (first destination-parts)
+                        :port (default-protocol-port protocol)))
+                   (2 (let ((port (ignore-errors
+                                   (parse-integer (second destination-parts)))))
+                        (when port
+                          (make-instance
+                           'destination
+                           :protocol protocol
+                           :host (first destination-parts)
+                           :port port))))))))
+        (let ((protocol-parts (str:split-omit-nulls "://" destination-specifier)))
+          (if (= 1 (length protocol-parts))
+              (make-destination-with-protocol
+               :http (first protocol-parts))
+              (make-destination-with-protocol
+               (make-keyword (first protocol-parts))
+               (second protocol-parts)))))))
+
+(defun destination-secure-p (destination)
+  (typep (protocol destination)
+         'secure-protocol))
 
 (defstruct (ssl-config (:constructor ssl-config))
   (certificate "cert.pem"
@@ -49,7 +94,7 @@
    :type port
    :read-only t)
   (destinator (lambda () 8081)
-   :type (or (function () destination) symbol)
+   :type (or (function () destination-specifier) symbol)
    :read-only t)
   (request-filter nil
    :read-only t)
